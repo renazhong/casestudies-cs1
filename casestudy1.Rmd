@@ -1,0 +1,219 @@
+---
+title: "Stander et al Evaluation Rubric"
+---
+
+Please provide thoughtful and honest feedback on the Stander et al paper.  The purpose of peer review exercises is not only to prepare you to conduct peer review in future jobs but also to enhance critical thinking, which should improve your own work. In addition, your thoughts and suggestions will benefit other teams (as we review case studies moving forward), pulling up the level of work of the entire class.
+
+Please use as much space as needed to answer the questions. Thanks for your input!
+
+
+1. Name and e-mail: Rena Zhong rz76@duke.edu
+
+2. Does the paper clearly articulate the authors’ research goals? (Select one)
+
+      *Yes*	         	Somewhat 	         	No
+      
+	(If somewhat or no is chosen, please address any issues.)
+
+3.	Do the analyses match the research question(s) and available data? If not, point out problem areas.
+
+Yes, I think each section (survival analysis, bayesian inference, posterior predictive distribution etc.) give a clear analysis of the research question and reflects the data well. They also give a good explanation as to why they use that method and how it shows the research question. 
+
+4. Are the methods described in enough detail that the work could be replicated by someone else? Is it clear what approach and model were used to evaluate hypotheses of interest?  If not, point out problem areas.
+
+Yes, the methods were described in detail, and the paper also provided some funtions and equations to back up the method that they used. Additionally, the provided code in the appendix makes it much more simple for someone else to be able to replicate the work and also provides some basic explanations throughout the appendix as well. 
+
+5. Does the paper contain a correct and effective interpretation of the results provided? Is all information needed to substantiate the results and conclusions (e.g., posterior probabilities, confidence intervals) included?  If not, point out problem areas.  
+
+Yes, the paper gives a good summary and explanation of the results. They use the models to explain how the conclusion is supported by the two methods they use. They correctly used confidence intervals to explain how it supported the results. 
+
+6. Are any tables and figures clear, effective, and informative?  Should any be eliminated, or are any new tables or figures needed?
+
+The tables and figures are clear, effective, and informative. I think a possible table that could be added would be a simple table with the most important variables in the dataset, to give a better understanding of what data they were working with. 
+
+7. Is the model appropriately validated?  What type of diagnostic methods were used to check any modeling assumptions, and are you satisfied the assumptions of the model are valid? If the model is not validated (e.g., because of lack of data), are there compelling reasons this cannot be done?  Has any sensitivity analysis been done, and are the results reasonable?  Should any additional sensitivity analyses been conducted? 
+
+The model is appropriately validated. Predictive distribution and posterior distribution of specially defined residuals are used to check the model. There was brief sensitivity analysis done using a Markov chain Monte Carlo algorithm, and the results seem reasonable. 
+
+8. Is the analysis easily reproduced based on the code (R file) and data provided? 
+
+Yes, the analysis is easily reproducible. 
+
+    + How long did it take you to reproduce this work, from start to finish (including downloading files, opening R etc)?
+        + <15 minutes
+        + 15-30 minutes
+        + 30-60 minutes
+        + 1-2 hours
+        + Over 2 hours but $< \infty$
+        + *Failed to reproduce work*
+  
+    + What challenges to reproducibility did you face?
+    
+    The challenges faced include installing the package 'rjags', possibly because the R version is not updated, so I had to use terminal to install the package through homebrew.
+    
+    + Comment on the reproducibility of the R file provided by the authors (not included online with the manuscript) versus the reproducibility of the code published with the paper as Appendix A. What challenges might you have faced trying to reproduce the results based solely on the information provided in the Appendix?
+    
+    It was mostly reproducible, but they should include some extra information about the package 'jags' and how to install it if there are errors.
+
+    + Update the popes data to reflect Pope Francis’s current time in office, and update the censoring date for Pope Francis and Pope Benedict XVI to be the due date of this assignment. Then provide here an updated version of Figure 4 reflecting these changes.
+    
+```{r figure-4}
+
+```
+    
+
+9. Is the paper professionally presented and generally free of distracting errors or other issues, including (but not limited to) insufficient organization or formatting; poor grammar, spelling, or punctuation; or too-small font? Note any concerns here.
+
+Yes, there were little to no mistakes in error, spelling, or punctuation. The formatting was overall very clear and the introduction did a good job at giving an overall overview of the paper and how it was formatted. 
+
+10. What are the strengths and limitations of the analysis and data?  Are they clearly acknowledged and presented in the manuscript?
+
+Some strengths include that the data is very widespread with only a few censored data points. Another strength is that there were two different approaches included. They are not as clearly presented in the paper, so they could spend a short section talking about the weaknesses and strengths.
+
+11.	What questions do you have for the authors?
+
+What are some ways to make the prediction even more accurate? 
+
+```{r prep-data}
+setwd("/Users/renazhong/sta-440")
+library(readr)
+popes_with_Francis <- read_csv("popes_25_December_2016.csv") 
+names(popes_with_Francis)
+popes <- popes_with_Francis[popes_with_Francis$Fel.Reg != 1,]
+survival_raw <- popes$Survival 
+n <- length(survival_raw)
+censored <- popes$Censored
+survival <- ifelse(censored == 0, survival_raw, NA)
+censoring_limits <- ifelse(censored == 0, 32, survival_raw)
+x_1 <- popes$Age.Election - mean(popes$Age.Election)
+x_2 <- popes$Year.Elected - mean(popes$Year.Elected)
+```
+
+
+```{r first-approach}
+# *** First Approach: treat the unknown survival time as a model parameter ***
+#
+first_approach <- function(){
+  for(i in 1:n){
+    #
+    # Likelihood part
+    #
+    censored[i] ~ dinterval(survival[i], censoring_limits[i]) 
+    # To deal with censoring: 
+    # censored equals 1 for Benedict XVI as of 25/12/2016, 
+    # 0 for the other popes.
+    # survival equals NA for Benedict XVI,
+    # and the survival times of the other popes.
+    # censoring_limits equals 11.7 for Benedict XVI,
+    # and values (e.g. 32) greater than or equal to 
+    # the survival times of the other popes.
+    survival[i] ~ dweib(r, mu[i]) # Basic Weibull assumption
+    mu[i] <- exp(beta[i])  # Defining beta as log(mu)
+    beta[i] <- beta_0 + beta_1*x_1[i] + beta_2*x_2[i]  
+    # beta = log(mu) is a linear function of the covariates
+  }
+  #
+  ####################################################
+  #
+  # Priors
+  #
+  beta_0 ~ dnorm(0.0, 1.0E-4) # Prior on beta_0 is normal with low precision
+  beta_1 ~ dnorm(0.0, 1.0E-4) # Prior on beta_1 is normal with low precision
+  beta_2 ~ dnorm(0.0, 1.0E-4) # Prior on beta_2 is normal with low precision
+  #
+  r ~ dexp(0.001) # Prior on r
+  #
+  ####################################################
+  #
+  # Define the alphas
+  #
+  alpha_0 <- - beta_0 / r
+  alpha_1 <- - beta_1 / r
+  alpha_2 <- - beta_2 / r
+  #
+  # Percentage increases
+  #
+  percentage_increase_age <- 100*(exp(alpha_1) - 1)
+  percentage_increase_year <- 100*(exp(alpha_2) - 1)
+  #
+  ####################################################
+  #
+  # Posterior median at various covariate values
+  #
+  beta_med <- beta_0 + beta_1*x_1_new + beta_2*x_2_new 
+  # New values need to be supplied
+  t_median <- pow(log(2) * exp(-beta_med), 1 / r)
+  #
+  ####################################################
+  #
+  # Predictive distribution of age at the new values
+  #
+  beta_Francis <- beta_0 + beta_1*age_Francis + beta_2*year_Francis 
+  # Values of age_Francis and year_Francis need to be provided
+  mu_Francis <- exp(beta_Francis)
+  survival_Francis ~ dweib(r, mu_Francis) %_% T(present_length, upper_length) 
+  # Take into account the current pontificate length
+  # Also specify a sensible upper bound
+  age_Francis_predictive <- age_at_election + survival_Francis 
+  # Work also with age
+}
+#
+# ------------------------------------------------------
+#
+# Run it!
+#
+library(R2jags)
+#
+# Prepare the data
+#
+age_new <- 60
+x_1_new <-  age_new - mean(popes$Age.Election)
+year_new <- 1750
+x_2_new <- year_new - mean(popes$Year.Elected)
+#
+#
+# Data specific to Francis
+#
+age_at_election <- 76.29
+age_Francis <- age_at_election - mean(popes$Age.Election)
+year_Francis <- 2013 - mean(popes$Year.Elected)
+#
+#
+# Predictive distribution of pontificate length for Francis at election
+# Conditional on being greater than 3.79 years (December 2016)
+#
+present_length <- 3.79
+upper_length <- 25
+#
+data_Popes_first_approach <- list("n",
+                   "censored",
+                   "survival",
+                   "censoring_limits",
+                   "x_1",
+                   "x_2",
+                   "x_1_new",
+                   "x_2_new",
+                   "age_at_election",
+                   "age_Francis",
+                   "year_Francis",
+                   "present_length",
+                   "upper_length")
+#
+Bayesian_Popes_first_approach <- jags(data = data_Popes_first_approach,  
+                       parameters.to.save = c("beta_0",
+                                              "beta_1",
+                                              "beta_2",
+                                              "alpha_0",
+                                              "alpha_1",
+                                              "alpha_2",
+                                              "percentage_increase_age",
+                                              "percentage_increase_year",
+                                              "r",
+                                              "t_median",
+                                              "survival_Francis",
+                                              "age_Francis_predictive"), 
+                       n.iter = 50000, 
+                       n.chains = 3,
+                       model.file = first_approach)
+
+```
